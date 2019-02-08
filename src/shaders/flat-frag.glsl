@@ -4,11 +4,13 @@ precision highp float;
 uniform vec3 u_Eye, u_Ref, u_Up;
 uniform vec2 u_Dimensions;
 uniform float u_Time;
+uniform vec3 u_MarbleBase, u_SolidBase, u_ChipColor;
 
 in vec2 fs_Pos;
 out vec4 out_Col;
 
 const vec3 light_Vec = vec3(4.0, 2.0, 1.0);
+int color_Id = -1;
 
 // Define color/shader IDs.
 #define BACKGROUND 0
@@ -111,11 +113,11 @@ float mintScoopSDF(vec3 p) {
 	mat4 transScoop = mat4(vec4(cos(radians(15.0)), sin(radians(15.0)), 0, 0),
 						  vec4(-sin(radians(15.0)), cos(radians(15.0)), 0, 0),
 						  vec4(0, 0, 1.0, 0),
-		 			  	  vec4(.75, 0.54, -1.0, 1.0));
+		 			  	  vec4(.75, 0.5, -1.0, 1.0));
 	mat4 rotScoop = mat4(vec4(1.0, 0, 0, 0),
 						 vec4(0, cos(radians(-15.0)), -sin(radians(-15.0)), 0),
 						  vec4(0, sin(radians(-15.0)), cos(radians(-15.0)), 0),
-		 			  	  vec4(0, 0, 0, 1.0));	 			  	  
+		 			  	  vec4(0, -0.3, 0, 1.0));	 			  	  
 	return scoopSDF(vec3(transScoop * rotScoop * vec4(p, 1.0)));
 }
 
@@ -178,21 +180,8 @@ float spoonSDF(vec3 p) {
 }
 
 float sceneSDF(vec3 p) {
-	return spoonSDF(p); //opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p)));
-}
-
-int sceneColorID(vec3 p) {
-    float intersection = sceneSDF(p);
-    if(floatEquality(intersection, spoonSDF(p))) {
-    	return SPOON;
-    } else if(floatEquality(intersection, bowlSDF(p))) {
-    	return BOWL;
-    } else if(floatEquality(intersection, marbleScoopSDF(p))) {
-    	return MARBLED;
-    } else if(floatEquality(intersection, mintScoopSDF(p))) {
-    	return MINT;
-    }
-    return BACKGROUND;
+	return opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p)));
+	//return opUnion(spoonSDF(p), opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p))));
 }
 
 /*
@@ -389,23 +378,23 @@ vec4 applyBlinnPhong(vec3 p, vec3 base, float power, vec3 shadowColor) {
 	return vec4(clamp(vec3(lambert.rgb + .2 * specularIntensity), 0.0f, 1.0f), 1.0f);
 }
 
-vec4 getColor(int id, vec3 p) {
-	switch(id) {
+vec4 getColor(vec3 p) {
+	switch(color_Id) {
 		case BOWL:
-			vec3 blue = vec3(195.0, 222.0, 224.0) / 255.0;
-			return applyBlinnPhong(p, blue, 4.0f, vec3(76.0, 15.0, 52.0) / 255.0f);
+			vec3 color = mix(vec3(37.0, 57.0, 155.0) / 255.0, vec3(196.0, 25.0, 82.0) / 255.0, cos(0.0433 * u_Time));
+			return applyBlinnPhong(p, color, 4.0f, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case MARBLED:
 			vec3 gray = vec3(20.0, 20.0, 25.0) / 255.0;
 			vec3 marble = clamp(gray + vec3(pow(perturbedFbm(1.489 * sin(p.xz) + p.zy), 3.0f)), 0.0, 1.0);
-			marble = clamp((1.0 - marble) + vec3(86.0, 66.0, 50.0) / 255.0, 0.0, 1.0);
+			marble = clamp((1.0 - marble) + u_MarbleBase, 0.0, 1.0);
 			marble *= perturbedFbm(.00000232 * cos(p.xz * p.xy) + sin(p.yz));
 			return applyLambert(p, marble, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case MINT:
-			vec3 mint = vec3(128.0, 206.0, 181.0) / 255.0;
+			vec3 mint = u_SolidBase;
 			mint *= perturbedFbm(.00009832 * cos(p.xz * p.xy) - sin(p.yz));
 			vec2 chocchip = worleyPoint(vec2(p.z, p.x + p.y));
 			if(noise(chocchip.x + chocchip.y) > 0.97) {
-				mint = vec3(40.0, 7.0, 7.0) / 255.0;
+				mint = u_ChipColor;
 			}
 			return applyLambert(p, mint, 1.1 * vec3(76.0, 15.0, 52.0) / 255.0f);
 		case SPOON:
@@ -430,14 +419,26 @@ void march(vec3 direction) {
 		pos = u_Eye + t * direction;
 		float dist = sceneSDF(pos);
 		if(dist < 0.015) {
-			out_Col = getColor(sceneColorID(pos), pos);
+		    if(floatEquality(dist, spoonSDF(pos))) {
+		    	color_Id = SPOON;
+		    } else if(floatEquality(dist, bowlSDF(pos))) {
+		    	color_Id = BOWL;
+		    } else if(floatEquality(dist, marbleScoopSDF(pos))) {
+		    	color_Id = MARBLED;
+		    } else if(floatEquality(dist, mintScoopSDF(pos))) {
+		    	color_Id = MINT;
+		    } else {
+		    	color_Id = BACKGROUND;
+		    }
+			out_Col = getColor(pos);
 			return;
 		}
 
 		t += dist;
 
 		if(t >= cutoff) {
-			out_Col = getColor(BACKGROUND, pos);
+			color_Id = BACKGROUND;
+			out_Col = getColor(pos);
 			return;
 		}
 	}

@@ -10,7 +10,9 @@ import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
 // Define an object with application parameters and button callbacks
 // This will be referred to by dat.GUI's functions that add GUI elements.
 const controls = {
-  tesselations: 5,
+  marbleColor: [ 86, 66, 50 ],
+  solidColor : [ 128, 206, 181 ], 
+  chipColor : [ 40, 7, 7 ],
   'Load Scene': loadScene, // A function pointer, essentially
 };
 
@@ -47,6 +49,10 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
+  gui.addColor(controls, 'marbleColor');
+  gui.addColor(controls, 'solidColor');
+  gui.addColor(controls, 'chipColor');
+
 
   // get canvas and webgl context
   const canvas = <HTMLCanvasElement> document.getElementById('canvas');
@@ -85,7 +91,10 @@ function main() {
     processKeyPresses();
     renderer.render(camera, flat, [
       square,
-    ], time);
+    ], time,
+      vec3.fromValues(controls.marbleColor[0] / 255.0, controls.marbleColor[1] / 255.0, controls.marbleColor[2] / 255.0),
+      vec3.fromValues(controls.solidColor[0] / 255.0, controls.solidColor[1] / 255.0, controls.solidColor[2] / 255.0),
+      vec3.fromValues(controls.chipColor[0] / 255.0, controls.chipColor[1] / 255.0, controls.chipColor[2] / 255.0));
     time++;
     stats.end();
 

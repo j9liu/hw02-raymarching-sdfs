@@ -30,6 +30,10 @@ class ShaderProgram {
   unifDimensions: WebGLUniformLocation;
   unifTime: WebGLUniformLocation;
 
+  unifMarbleBase: WebGLUniformLocation;
+  unifSolidBase: WebGLUniformLocation;
+  unifChipColor: WebGLUniformLocation;
+
   constructor(shaders: Array<Shader>) {
     this.prog = gl.createProgram();
 
@@ -41,12 +45,16 @@ class ShaderProgram {
       throw gl.getProgramInfoLog(this.prog);
     }
 
-    this.attrPos = gl.getAttribLocation(this.prog, "vs_Pos");
-    this.unifEye   = gl.getUniformLocation(this.prog, "u_Eye");
-    this.unifRef   = gl.getUniformLocation(this.prog, "u_Ref");
-    this.unifUp   = gl.getUniformLocation(this.prog, "u_Up");
+    this.attrPos          = gl.getAttribLocation(this.prog, "vs_Pos");
+    this.unifEye          = gl.getUniformLocation(this.prog, "u_Eye");
+    this.unifRef          = gl.getUniformLocation(this.prog, "u_Ref");
+    this.unifUp           = gl.getUniformLocation(this.prog, "u_Up");
     this.unifDimensions   = gl.getUniformLocation(this.prog, "u_Dimensions");
-    this.unifTime   = gl.getUniformLocation(this.prog, "u_Time");
+    this.unifTime         = gl.getUniformLocation(this.prog, "u_Time");
+
+    this.unifMarbleBase   = gl.getUniformLocation(this.prog, "u_MarbleBase");
+    this.unifSolidBase    = gl.getUniformLocation(this.prog, "u_SolidBase");
+    this.unifChipColor    = gl.getUniformLocation(this.prog, "u_ChipColor");
   }
 
   use() {
@@ -80,6 +88,27 @@ class ShaderProgram {
     this.use();
     if(this.unifTime !== -1) {
       gl.uniform1f(this.unifTime, t);
+    }
+  }
+
+  setMarbleBase(color: vec3) {
+    this.use();
+    if(this.unifMarbleBase != -1) {
+      gl.uniform3f(this.unifMarbleBase, color[0], color[1], color[2]);
+    }
+  }
+
+   setSolidBase(color: vec3) {
+    this.use();
+    if(this.unifSolidBase != -1) {
+      gl.uniform3f(this.unifSolidBase, color[0], color[1], color[2]);
+    }
+  }
+
+  setChipColor(color: vec3) {
+    this.use();
+    if(this.unifChipColor != -1) {
+      gl.uniform3f(this.unifChipColor, color[0], color[1], color[2]);
     }
   }
 
