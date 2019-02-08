@@ -16,4 +16,15 @@ The background is a simple gradient between a pale yellow and green palette, lin
 
 ![](background.png)
 
-The bowl was modeled using a capped cone SDF, where the depression in the bowl results from subtracting a smaller version of the volume.
+
+The bowl was modeled using a capped cone SDF, where the depression in the bowl results from subtracting a smaller version of the volume. For shading, the 
+
+![](bowl.png)
+![](bowl2.png)
+
+The ice scream scoops were modeled using variously transformed sphere SDFs.
+![](icecream.png)
+![](icecream2.png)
+![](icecream3.png)
+![](icecream4.png)
+![](icecream5.png)

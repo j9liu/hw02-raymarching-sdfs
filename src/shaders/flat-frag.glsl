@@ -8,13 +8,14 @@ uniform float u_Time;
 in vec2 fs_Pos;
 out vec4 out_Col;
 
-const vec3 light_Vec = vec3(4.0, 6.0, 1.0);
+const vec3 light_Vec = vec3(4.0, 2.0, 1.0);
 
 // Define color/shader IDs.
 #define BACKGROUND 0
 #define BOWL 1
-#define ICE_CREAM 2
-#define SPOON 3
+#define MARBLED 2
+#define MINT 3
+#define SPOON 4
 
 bool floatEquality(float x, float y) {
 	return abs(x - y) < 0.0001;
@@ -75,36 +76,35 @@ vec2 opRevolution(vec3 p, float w) {
  * MY SDFs
  */
 
-float scoopSegment(vec3 p) {
+float scoopSegmentSDF(vec3 p) {
 	mat4 transSphere = mat4(vec4(1.0, 0, 0, 0),
 					   		vec4(0, 1.0, 0, 0),
 					   		vec4(0, 0, 1.0, 0),
-					   		vec4(-2.8, -0.2, 0.0, 1.0));
-	return sphereSDF(vec3(transSphere * vec4(p, 1.0)), 1.2);
+					   		vec4(-1.6, -0.2, 0.0, 1.0));
+	return sphereSDF(vec3(transSphere * vec4(p, 1.0)), .6);
 }
 
 float scoopSDF(vec3 p) {
-	float d = scoopSegment(p);
+	float d = scoopSegmentSDF(p);
 	for(float i = 30.0; i < 360.0; i += 30.0) {
 		mat4 rotSphere = mat4(vec4(cos(radians(i)), 0, sin(radians(i)), 0),
 						   	  vec4(0, 1.0, 0, 0),
 						   	  vec4(-sin(radians(i)), 0, cos(radians(i)), 0),
 						   	  vec4(0, 0, 0.0, 1.0));
-		d = opSmoothUnion(d, scoopSegment(vec3(rotSphere * vec4(p, 1.0))), .25);
+		d = opSmoothUnion(d, scoopSegmentSDF(vec3(rotSphere * vec4(p, 1.0))), .25);
 	}
 
 	mat4 transSphere = mat4(vec4(1.0, 0, 0, 0),
 					   		vec4(0, 1.0, 0, 0),
 					   		vec4(0, 0, 1.0, 0),
 					   		vec4(0, -.9, 0.0, 1.0));
-
-	d = opSmoothUnion(d, sphereSDF(vec3(transSphere * vec4(p, 1.0)), 2.8), .05);
+	d = opSmoothUnion(d, sphereSDF(vec3(transSphere * vec4(p, 1.0)), 1.6), .05);
 
 	mat4 transBox = mat4(vec4(1.0, 0, 0, 0),
 						 vec4(0, 1.0, 0, 0),
 						 vec4(0, 0, 1.0, 0),
-					 	 vec4(0.0, 4.33, 0, 1.0));
-	return opSubtraction(boxSDF(vec3(transBox * vec4(p, 1.0)), vec3(5.0, 5.0, 5.0)), d);
+					 	 vec4(0.0, 4, 0, 1.0));
+	return opSubtraction(boxSDF(vec3(transBox * vec4(p, 1.0)), vec3(4.0, 3.0, 4.0)), d);
 }
 
 float bowlSDF(vec3 p) {
@@ -166,7 +166,7 @@ float spoonSDF(vec3 p) {
 }
 
 float sceneSDF(vec3 p) {
-	return bowlSDF(p); //opUnion(spoonSDF(p), opUnion(bowlSDF(p), scoopSDF(p)));
+	return scoopSDF(p); //opUnion(spoonSDF(p), opUnion(bowlSDF(p), scoopSDF(p)));
 }
 
 int sceneColorID(vec3 p) {
@@ -176,7 +176,7 @@ int sceneColorID(vec3 p) {
     } else if(floatEquality(intersection, bowlSDF(p))) {
     	return BOWL;
     } else if(floatEquality(intersection, scoopSDF(p))) {
-    	return ICE_CREAM;
+    	return MARBLED;
     }
 
     return BACKGROUND;
@@ -207,7 +207,7 @@ float fbm(float x) {
 	float total = 0.0f;
 	float persistence = 0.5f;
 	int octaves = 8;
-	
+
 	for(int i = 0; i < octaves; i++) {
 		float freq = pow(2.0f, float(i));
 		float amp = pow(persistence, float(i));
@@ -263,6 +263,42 @@ float gain(float x, float k)
     return (x < 0.5) ? a : 1.0 - a;
 }
 
+#define cell_size 2.0
+
+vec2 generate_point(vec2 cell) {
+    vec2 p = vec2(cell.x, cell.y);
+    p += fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)) * 43758.5453)));
+    return p * cell_size;
+}
+
+float worleyNoise(vec2 pixel) {
+    vec2 cell = floor(pixel / cell_size);
+
+    vec2 point = generate_point(cell);
+
+    float shortest_distance = length(pixel - point);
+
+   // compute shortest distance from cell + neighboring cell points
+
+    for(float i = -1.0f; i <= 1.0f; i += 1.0f) {
+        float ncell_x = cell.x + i;
+        for(float j = -1.0f; j <= 1.0f; j += 1.0f) {
+            float ncell_y = cell.y + j;
+
+            // get the point for that cell
+            vec2 npoint = generate_point(vec2(ncell_x, ncell_y));
+
+            // compare to previous distances
+            float distance = length(pixel - npoint);
+            if(distance < shortest_distance) {
+                shortest_distance = distance;
+            }
+        }
+    }
+
+    return shortest_distance / cell_size;
+}
+
 /*
  * RAY MARCHING
  */
@@ -289,18 +325,19 @@ vec3 getNormal(vec3 p) {
 					    - sceneSDF(vec3(p.x, p.y, p.z - epsilon))));
 }
 
-vec4 applyLambert(vec3 p, vec3 base) {
+vec4 applyLambert(vec3 p, vec3 base, vec3 shadowColor) {
 	vec3 normal = getNormal(p);
 	float lambert = clamp(dot(normalize(normal), normalize(light_Vec)), 0.0, 1.0);
 	// Add ambient lighting
 	float ambientTerm = 0.2;
 	float lightIntensity = lambert + ambientTerm;
-	return vec4(clamp(base * lightIntensity, 0.0f, 1.0f), 1.0f);
+	vec3 shadow = 0.3 * shadowColor * (1.0 - lightIntensity);
+	return vec4(clamp(base * lightIntensity + shadow, 0.0f, 1.0f), 1.0f);
 }
 
 vec4 applyBlinnPhong(vec3 p, vec3 base, float power) {
 	vec3 normal = getNormal(p);
-	vec4 lambert = applyLambert(p, base);
+	vec4 lambert = applyLambert(p, base, vec3(1.0));
 	// Average the view / light vector
     vec3 h_vector = (normalize(light_Vec) + normalize(u_Eye)) / 2.0f;
 	// Calculate specular intensity
@@ -313,11 +350,12 @@ vec4 getColor(int id, vec3 p) {
 		case BOWL:
 			vec3 blue = vec3(195.0, 222.0, 224.0) / 255.0;
 			return applyBlinnPhong(p, blue, 4.0f);
-		case ICE_CREAM:
+		case MARBLED:
 			vec3 gray = vec3(20.0, 20.0, 25.0) / 255.0;
 			vec3 marble = clamp(gray + vec3(pow(perturbedFbm(1.489 * sin(p.xz) + p.zy), 3.0f)), 0.0, 1.0);
 			marble = clamp((1.0 - marble) + vec3(86.0, 66.0, 50.0) / 255.0, 0.0, 1.0);
-			return applyLambert(p, marble);
+			marble *= perturbedFbm(.00000232 * cos(p.xz * p.xy) + sin(p.yz));
+			return applyLambert(p, marble, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case SPOON:
 			vec3 silver = vec3(101, 106, 107) / 255.0;
 			return applyBlinnPhong(p, silver, 6.0f);
@@ -339,7 +377,7 @@ void march(vec3 direction) {
 	for(int i = 0; i < max_steps; i++) {
 		pos = u_Eye + t * direction;
 		float dist = sceneSDF(pos);
-		if(dist < 0.001) {
+		if(dist < 0.015) {
 			out_Col = getColor(sceneColorID(pos), pos);
 			return;
 		}
