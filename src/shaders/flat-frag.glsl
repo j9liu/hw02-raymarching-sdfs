@@ -35,12 +35,6 @@ float boxSDF(vec3 p, vec3 b) {
          + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf 
 }
 
-float roundBoxSDF(vec3 p, vec3 b, float r) {
-  vec3 d = abs(p) - b;
-  return length(max(d,0.0)) - r
-         + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf
-}
-
 float cappedConeSDF(vec3 p, float h, float r1, float r2) {
 	vec2 q = vec2(length(p.xz), p.y);
     vec2 k1 = vec2(r2,h);
@@ -98,13 +92,15 @@ float scoopSDF(vec3 p) {
 					   		vec4(0, 1.0, 0, 0),
 					   		vec4(0, 0, 1.0, 0),
 					   		vec4(0, -.9, 0.0, 1.0));
-	d = opSmoothUnion(d, sphereSDF(vec3(transSphere * vec4(p, 1.0)), 1.6), .05);
+	return opSmoothUnion(d, sphereSDF(vec3(transSphere * vec4(p, 1.0)), 1.6), .05);
+}
 
-	mat4 transBox = mat4(vec4(1.0, 0, 0, 0),
-						 vec4(0, 1.0, 0, 0),
-						 vec4(0, 0, 1.0, 0),
-					 	 vec4(0.0, 4, 0, 1.0));
-	return opSubtraction(boxSDF(vec3(transBox * vec4(p, 1.0)), vec3(4.0, 3.0, 4.0)), d);
+float marbleScoopSDF(vec3 p) {
+	mat4 transScoop = mat4(vec4(1.0, 0, 0, 0),
+					  	   vec4(0, 1.0, 0, 0),
+					 	   vec4(0, 0, 1.0, 0),
+					  	   vec4(-.5, 0, 1.0, 1.0));
+	return scoopSDF(vec3(transScoop * vec4(p, 1.0)));
 }
 
 float bowlSDF(vec3 p) {
@@ -166,7 +162,7 @@ float spoonSDF(vec3 p) {
 }
 
 float sceneSDF(vec3 p) {
-	return scoopSDF(p); //opUnion(spoonSDF(p), opUnion(bowlSDF(p), scoopSDF(p)));
+	return opUnion(marbleScoopSDF(p), bowlSDF(p));//, scoopSDF(p)));
 }
 
 int sceneColorID(vec3 p) {
@@ -175,12 +171,14 @@ int sceneColorID(vec3 p) {
     	return SPOON;
     } else if(floatEquality(intersection, bowlSDF(p))) {
     	return BOWL;
-    } else if(floatEquality(intersection, scoopSDF(p))) {
+    } else if(floatEquality(intersection, marbleScoopSDF(p))) {
     	return MARBLED;
+    } else if(floatEquality(intersection, scoopSDF(p))) {
+    	return MINT;
     }
 
     return BACKGROUND;
-} 
+}
 
 /*
  * NOISE / TOOLBOX FUNCTIONS
@@ -263,13 +261,15 @@ float gain(float x, float k)
     return (x < 0.5) ? a : 1.0 - a;
 }
 
-#define cell_size 2.0
+#define cell_size 0.3
 
 vec2 generate_point(vec2 cell) {
     vec2 p = vec2(cell.x, cell.y);
     p += fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)) * 43758.5453)));
     return p * cell_size;
 }
+
+
 
 float worleyNoise(vec2 pixel) {
     vec2 cell = floor(pixel / cell_size);
@@ -297,6 +297,35 @@ float worleyNoise(vec2 pixel) {
     }
 
     return shortest_distance / cell_size;
+}
+
+vec2 worleyPoint(vec2 pixel) {
+	vec2 cell = floor(pixel / cell_size);
+
+    vec2 point = generate_point(cell);
+
+    float shortest_distance = length(pixel - point);
+
+   // compute shortest distance from cell + neighboring cell points
+
+    for(float i = -1.0f; i <= 1.0f; i += 1.0f) {
+        float ncell_x = cell.x + i;
+        for(float j = -1.0f; j <= 1.0f; j += 1.0f) {
+            float ncell_y = cell.y + j;
+
+            // get the point for that cell
+            vec2 npoint = generate_point(vec2(ncell_x, ncell_y));
+
+            // compare to previous distances
+            float distance = length(pixel - npoint);
+            if(distance < shortest_distance) {
+                shortest_distance = distance;
+                point = npoint;
+            }
+        }
+    }
+
+    return point;
 }
 
 /*
@@ -356,6 +385,14 @@ vec4 getColor(int id, vec3 p) {
 			marble = clamp((1.0 - marble) + vec3(86.0, 66.0, 50.0) / 255.0, 0.0, 1.0);
 			marble *= perturbedFbm(.00000232 * cos(p.xz * p.xy) + sin(p.yz));
 			return applyLambert(p, marble, vec3(76.0, 15.0, 52.0) / 255.0f);
+		case MINT:
+			vec3 mint = vec3(128.0, 206.0, 181.0) / 255.0;
+			mint *= perturbedFbm(.00009832 * cos(p.xz * p.xy) - sin(p.yz));
+			vec2 chocchip = worleyPoint(vec2(p.z, p.x + p.y));
+			if(noise(chocchip.x + chocchip.y) > 0.97) {
+				mint = vec3(40.0, 7.0, 7.0) / 255.0;
+			}
+			return applyLambert(p, mint, 1.1 * vec3(76.0, 15.0, 52.0) / 255.0f);
 		case SPOON:
 			vec3 silver = vec3(101, 106, 107) / 255.0;
 			return applyBlinnPhong(p, silver, 6.0f);
