@@ -43,7 +43,7 @@ This scoop model serves as a base for all the scoops in the scene, which then ma
 
 ![](ic4.png)
 
-For the chocolate-vanilla marble ice cream, the perturbed FBM was used to produce a pattern that was added on to the base color. However, the additive lighting meant that the bae would always appear as vanilla, instead of chocolate. 
+For the chocolate-vanilla marble ice cream, the perturbed FBM was used to produce a pattern that was added on to the base color. However, the additive lighting meant that the base would always appear as vanilla, instead of chocolate. 
 
 ![](ic5.png)
 
