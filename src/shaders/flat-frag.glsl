@@ -175,13 +175,68 @@ float spoonSDF(vec3 p) {
 						  vec4(0, 1.0, 0, 0),
 						  vec4(0, 0, 1.0, 0),
 						  vec4(5.0, 0, 0, 1.0));
-	return opSmoothUnion(spoonHeadSDF(vec3(translate * vec4(p, 1.0))),
-						 spoonHandleSDF(vec3(translate * vec4(p, 1.0))), 0.224);
+	float angle = radians(9.0 * cos(0.04 * u_Time));
+	mat4 rotate = mat4(vec4(1.0, 0, 0, 0),
+					   vec4(0, cos(angle), -sin(angle), 0),
+				       vec4(0, sin(angle), cos(angle), 0),
+				       vec4(0, 0, 0.0, 1.0));
+	return opSmoothUnion(spoonHeadSDF(vec3(translate * rotate * vec4(p, 1.0))),
+						 spoonHandleSDF(vec3(translate * rotate * vec4(p, 1.0))), 0.224);
 }
 
 float sceneSDF(vec3 p) {
-	return opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p)));
-	//return opUnion(spoonSDF(p), opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p))));
+	return opUnion(spoonSDF(p), opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p))));
+}
+
+bool intersectsBox(vec3 dir, vec3 min, vec3 max) {
+	float tmin = (min.x - u_Eye.x) / dir.x;
+	float tmax = (max.x - u_Eye.x) / dir.x;
+
+	if (tmin > tmax) {
+		float temp = tmin;
+		tmin = tmax;
+		tmax = temp;
+	}
+
+	float tymin = (min.y - u_Eye.y) / dir.y;
+	float tymax = (max.y - u_Eye.y) / dir.y;
+
+	if (tymin > tymax) {
+		float temp = tymin;
+		tymin = tymax;
+		tymax = temp;
+	}
+
+	if ((tmin > tymax) || (tymin > tmax)) {
+		return false; 
+	}
+ 
+    if (tymin > tmin) {
+    	tmin = tymin;
+    }
+ 
+    if (tymax < tmax) {
+    	tmax = tymax; 
+    }
+ 
+    float tzmin = (min.z - u_Eye.z) / dir.z; 
+    float tzmax = (max.z - u_Eye.z) / dir.z; 
+ 
+    if (tzmin > tzmax) {
+		float temp = tzmin;
+		tzmin = tzmax;
+		tzmax = temp;
+    }
+ 
+    if ((tmin > tzmax) || (tzmin > tmax)) {
+        return false; 
+    }
+
+	return true;
+}
+
+bool withinVolume(vec3 dir) {
+	return intersectsBox(dir, vec3(-7.0, -4.0, -5.0), vec3(10.0, 10.0, 10.0));
 }
 
 /*
@@ -259,11 +314,17 @@ float perturbedFbm(vec2 p) {
       return fbm2( p + 4.0*r );
 }
 
-float gain(float x, float k) 
-{
-    float a = 0.5 * pow(2.0 * ((x < 0.5) ? x : 1.0-x), k);
-    return (x < 0.5) ? a : 1.0 - a;
+float bias (float b, float t) {
+	return pow(t, log(b) / log(0.5f));
 }
+
+float gain (float g, float t) {
+	if(t < 0.5f) {
+		return bias(1.0 - g, 2.0 * t) / 2.0;
+	}
+	return 1.0 - bias(1.0 - g, 2.0 - 2.0 * t) / 2.0;
+}
+
 
 #define cell_size 0.3
 
@@ -272,8 +333,6 @@ vec2 generate_point(vec2 cell) {
     p += fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)) * 43758.5453)));
     return p * cell_size;
 }
-
-
 
 float worleyNoise(vec2 pixel) {
     vec2 cell = floor(pixel / cell_size);
@@ -381,7 +440,11 @@ vec4 applyBlinnPhong(vec3 p, vec3 base, float power, vec3 shadowColor) {
 vec4 getColor(vec3 p) {
 	switch(color_Id) {
 		case BOWL:
-			vec3 color = mix(vec3(37.0, 57.0, 155.0) / 255.0, vec3(196.0, 25.0, 82.0) / 255.0, cos(0.0433 * u_Time));
+			vec3 color = vec3(196.0, 25.0, 82.0) / 255.0;
+			float stripe = pow(fbm(2.0f * fs_Pos.x + fs_Pos.y + gain(0.6, 0.01 * float(int(u_Time) % 2000))), 5.0f);
+			if(stripe > 1.0f) {
+				color += vec3(0.6, 0.6, 0.8) * abs(fs_Pos.y);
+			}
 			return applyBlinnPhong(p, color, 4.0f, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case MARBLED:
 			vec3 gray = vec3(20.0, 20.0, 25.0) / 255.0;
@@ -412,9 +475,17 @@ vec4 getColor(vec3 p) {
 #define max_steps 200	
 #define cutoff 1100.0f
 void march(vec3 direction) {
+	// check if will hit; if it doesn't, return early
+	if(!withinVolume(direction)) {
+		color_Id = BACKGROUND;
+		out_Col = getColor(vec3(0));
+		return;
+	}
+
 	float t = 0.0f;
 	int temp = 1;
 	vec3 pos;
+
 	for(int i = 0; i < max_steps; i++) {
 		pos = u_Eye + t * direction;
 		float dist = sceneSDF(pos);
