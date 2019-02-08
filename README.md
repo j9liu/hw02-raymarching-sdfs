@@ -34,3 +34,12 @@ For the chocolate-vanilla marble ice cream, the perturbed FBM was used to produc
 ![](icecream5.png)
 To get the desired color scheme, I used a dark gray as my base color, added the pattern, and inverted the colors so that the base was black and the marble was white. From there, I could add any color to the black and get my desired base.
 ![](icecream6.png)
+For the mint chocolate chip ice cream, I applied the same perturbed FBM to generate striations through the scoop. I then used worley noise to calibrate the points and cells generated with worley noise, passing the points through a random function. The cells whose values fall above an arbitrary threshold are attributed a brown color to represent chocolate chips.
+![](icecream7.png)
+
+![](spoon.png)
+![](spoon2.png)
+![](spoon3.png)
+![](spoon4.png)
+![](spoon5.png)
+![](spoon6.png)

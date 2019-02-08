@@ -96,16 +96,32 @@ float scoopSDF(vec3 p) {
 }
 
 float marbleScoopSDF(vec3 p) {
-	mat4 transScoop = mat4(vec4(1.0, 0, 0, 0),
-					  	   vec4(0, 1.0, 0, 0),
-					 	   vec4(0, 0, 1.0, 0),
-					  	   vec4(-.5, 0, 1.0, 1.0));
-	return scoopSDF(vec3(transScoop * vec4(p, 1.0)));
+	mat4 transScoop = mat4(vec4(cos(radians(-11.0)), sin(radians(-11.0)), 0, 0),
+						  vec4(-sin(radians(-11.0)), cos(radians(-11.0)), 0, 0),
+						  vec4(0, 0, 1.0, 0),
+		 			  	  vec4(-.5, 0.53, 1.0, 1.0));
+	mat4 transScoop2 = mat4(vec4(1.0, 0, 0, 0),
+						 vec4(0, cos(radians(10.0)), -sin(radians(10.0)), 0),
+						  vec4(0, sin(radians(10.0)), cos(radians(10.0)), 0),
+		 			  	  vec4(0, -.4, 0, 1.0));	 			  	  
+	return scoopSDF(vec3(transScoop2 * transScoop * vec4(p, 1.0)));
+}
+
+float mintScoopSDF(vec3 p) {
+	mat4 transScoop = mat4(vec4(cos(radians(15.0)), sin(radians(15.0)), 0, 0),
+						  vec4(-sin(radians(15.0)), cos(radians(15.0)), 0, 0),
+						  vec4(0, 0, 1.0, 0),
+		 			  	  vec4(.75, 0.54, -1.0, 1.0));
+	mat4 rotScoop = mat4(vec4(1.0, 0, 0, 0),
+						 vec4(0, cos(radians(-15.0)), -sin(radians(-15.0)), 0),
+						  vec4(0, sin(radians(-15.0)), cos(radians(-15.0)), 0),
+		 			  	  vec4(0, 0, 0, 1.0));	 			  	  
+	return scoopSDF(vec3(transScoop * rotScoop * vec4(p, 1.0)));
 }
 
 float bowlSDF(vec3 p) {
 	mat4 trans = mat4(vec4(1.0, 0, 0, 0),
-					  vec4(0, 1.0, 0, 0),
+					  vec4(0, 1.0, 0, 0),	
 					  vec4(0, 0, 1.0, 0),
 					  vec4(0, .1, 0, 1.0));
 	return opSubtraction(cappedConeSDF(p, 0.9, 2.1, 3.75),
@@ -162,7 +178,7 @@ float spoonSDF(vec3 p) {
 }
 
 float sceneSDF(vec3 p) {
-	return opUnion(marbleScoopSDF(p), bowlSDF(p));//, scoopSDF(p)));
+	return spoonSDF(p); //opUnion(bowlSDF(p), opUnion(marbleScoopSDF(p), mintScoopSDF(p)));
 }
 
 int sceneColorID(vec3 p) {
@@ -173,10 +189,9 @@ int sceneColorID(vec3 p) {
     	return BOWL;
     } else if(floatEquality(intersection, marbleScoopSDF(p))) {
     	return MARBLED;
-    } else if(floatEquality(intersection, scoopSDF(p))) {
+    } else if(floatEquality(intersection, mintScoopSDF(p))) {
     	return MINT;
     }
-
     return BACKGROUND;
 }
 
@@ -364,9 +379,9 @@ vec4 applyLambert(vec3 p, vec3 base, vec3 shadowColor) {
 	return vec4(clamp(base * lightIntensity + shadow, 0.0f, 1.0f), 1.0f);
 }
 
-vec4 applyBlinnPhong(vec3 p, vec3 base, float power) {
+vec4 applyBlinnPhong(vec3 p, vec3 base, float power, vec3 shadowColor) {
 	vec3 normal = getNormal(p);
-	vec4 lambert = applyLambert(p, base, vec3(1.0));
+	vec4 lambert = applyLambert(p, base, shadowColor);
 	// Average the view / light vector
     vec3 h_vector = (normalize(light_Vec) + normalize(u_Eye)) / 2.0f;
 	// Calculate specular intensity
@@ -378,7 +393,7 @@ vec4 getColor(int id, vec3 p) {
 	switch(id) {
 		case BOWL:
 			vec3 blue = vec3(195.0, 222.0, 224.0) / 255.0;
-			return applyBlinnPhong(p, blue, 4.0f);
+			return applyBlinnPhong(p, blue, 4.0f, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case MARBLED:
 			vec3 gray = vec3(20.0, 20.0, 25.0) / 255.0;
 			vec3 marble = clamp(gray + vec3(pow(perturbedFbm(1.489 * sin(p.xz) + p.zy), 3.0f)), 0.0, 1.0);
@@ -395,7 +410,7 @@ vec4 getColor(int id, vec3 p) {
 			return applyLambert(p, mint, 1.1 * vec3(76.0, 15.0, 52.0) / 255.0f);
 		case SPOON:
 			vec3 silver = vec3(101, 106, 107) / 255.0;
-			return applyBlinnPhong(p, silver, 6.0f);
+			return applyBlinnPhong(p, silver, 6.0f, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case BACKGROUND:
 		default:
 			return vec4(mix(vec3(255.0, 247.0, 226.0) / 255.0,
