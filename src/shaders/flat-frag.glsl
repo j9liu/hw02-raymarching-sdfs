@@ -23,9 +23,9 @@ bool floatEquality(float x, float y) {
 	return abs(x - y) < 0.0001;
 }
 
-/*
- * GENERAL SDFs AND SDF OPERATIONS
- */
+///////////////////////////////////
+//  GENERAL SDFs AND SDF OPERATIONS
+///////////////////////////////////
 
 float sphereSDF(vec3 p, float r) {
 	return length(p) - r;
@@ -34,7 +34,7 @@ float sphereSDF(vec3 p, float r) {
 float boxSDF(vec3 p, vec3 b) {
   vec3 d = abs(p) - b;
   return length(max(d,0.0))
-         + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf 
+         + min(max(d.x,max(d.y,d.z)),0.0);
 }
 
 float cappedConeSDF(vec3 p, float h, float r1, float r2) {
@@ -68,9 +68,9 @@ vec2 opRevolution(vec3 p, float w) {
     return vec2( length(p.xz) - w, p.y );
 }
 
-/*
- * MY SDFs
- */
+///////////////////////////////////
+// CUSTOM SCENE SDFs
+///////////////////////////////////
 
 float scoopSegmentSDF(vec3 p) {
 	mat4 transSphere = mat4(vec4(1.0, 0, 0, 0),
@@ -239,9 +239,9 @@ bool withinVolume(vec3 dir) {
 	return intersectsBox(dir, vec3(-7.0, -4.0, -5.0), vec3(10.0, 10.0, 10.0));
 }
 
-/*
- * NOISE / TOOLBOX FUNCTIONS
- */
+///////////////////////////////////
+// NOISE & TOOLBOX FUNCTIONS
+///////////////////////////////////
 
 float noise(float i) {
 	return fract(sin(vec2(203.311f * float(i), float(i) * sin(0.324f + 140.0f * float(i))))).x;
@@ -391,21 +391,9 @@ vec2 worleyPoint(vec2 pixel) {
     return point;
 }
 
-/*
- * RAY MARCHING
- */
-
-vec3 rayCast() {
-  vec3 forward = normalize(u_Ref - u_Eye);
-  vec3 right = cross(forward, u_Up);
-  vec3 up = cross(right, forward);
-  float len = length(u_Ref - u_Eye);
-
-  vec3 v = up * len * tan(22.5f);
-  vec3 h = right * len * (u_Dimensions.x / u_Dimensions.y) * tan(22.5f);
-  vec3 p = u_Ref + fs_Pos.x * h + fs_Pos.y * v;
-  return normalize(p - u_Eye);
-}
+///////////////////////////////////
+// SHADING / MATERIAL FUNCTIONS
+///////////////////////////////////
 
 #define epsilon 0.0005f
 vec3 getNormal(vec3 p) {
@@ -441,10 +429,6 @@ vec4 getColor(vec3 p) {
 	switch(color_Id) {
 		case BOWL:
 			vec3 color = vec3(196.0, 25.0, 82.0) / 255.0;
-			float stripe = pow(fbm(2.0f * fs_Pos.x + fs_Pos.y + gain(0.6, 0.01 * float(int(u_Time) % 2000))), 5.0f);
-			if(stripe > 1.0f) {
-				color += vec3(0.6, 0.6, 0.8) * abs(fs_Pos.y);
-			}
 			return applyBlinnPhong(p, color, 4.0f, vec3(76.0, 15.0, 52.0) / 255.0f);
 		case MARBLED:
 			vec3 gray = vec3(20.0, 20.0, 25.0) / 255.0;
@@ -471,24 +455,41 @@ vec4 getColor(vec3 p) {
 	}
 }
 
+///////////////////////////////////
+// RAY MARCHING FUNCTIONS
+///////////////////////////////////
+
+vec3 rayCast() {
+  vec3 forward = normalize(u_Ref - u_Eye);
+  vec3 right = cross(forward, u_Up);
+  vec3 up = cross(right, forward);
+  float len = length(u_Ref - u_Eye);
+
+  vec3 v = up * len * tan(22.5f);
+  vec3 h = right * len * (u_Dimensions.x / u_Dimensions.y) * tan(22.5f);
+  vec3 p = u_Ref + fs_Pos.x * h + fs_Pos.y * v;
+  return normalize(p - u_Eye);
+}
+
 // March along the ray
-#define max_steps 200	
-#define cutoff 1100.0f
+#define MAX_STEPS 200	
+#define CUTOFF 100.0f
+
 void march(vec3 direction) {
 	// check if will hit; if it doesn't, return early
-	if(!withinVolume(direction)) {
+	/*if(!withinVolume(direction)) {
 		color_Id = BACKGROUND;
 		out_Col = getColor(vec3(0));
 		return;
-	}
+	}*/
 
 	float t = 0.0f;
 	int temp = 1;
 	vec3 pos;
 
-	for(int i = 0; i < max_steps; i++) {
+	for(int i = 0; i < MAX_STEPS; i++) {
 		pos = u_Eye + t * direction;
-		float dist = sceneSDF(pos);
+		float dist = bowlSDF(pos); //sceneSDF(pos);
 		if(dist < 0.015) {
 		    if(floatEquality(dist, spoonSDF(pos))) {
 		    	color_Id = SPOON;
@@ -507,7 +508,7 @@ void march(vec3 direction) {
 
 		t += dist;
 
-		if(t >= cutoff) {
+		if(t >= CUTOFF) {
 			color_Id = BACKGROUND;
 			out_Col = getColor(pos);
 			return;
